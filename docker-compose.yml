@@ -1,11 +1,38 @@
 version: '3'
+
+volumes:
+  mongo-data:
+    driver: local
+    driver_opts:
+        type: xfs
+        device: "/xapi_data/mongo"
+        o: bind
+  xapi-storage:
+    driver: local
+    driver_opts:
+        type: xfs
+        device: "/xapi_data/xapi-storage"
+        o: bind
+  app-storage:
+    driver: local
+    driver_opts:
+        type: ext4
+        device: "/LRS/app-storage"
+        o: bind
+  ui-logs:
+    driver: local
+    driver_opts:
+        type: ext4
+        device: "/LRS/ui-logs"
+        o: bind
+
 services:
 
     mongo:
-        image: mongo:latest
+        image: mongo:4.4.18
         restart: unless-stopped
         volumes:
-            - "${DATA_LOCATION}/mongo:/data/db"
+            - mongo-data:/data/db
 
     redis:
         image: redis:latest
@@ -21,8 +48,10 @@ services:
         depends_on:
             - mongo
             - redis
+        ports:
+            - "8081:8081"
         volumes:
-            - "${DATA_LOCATION}/xapi-storage:/usr/src/app/storage"
+            - xapi-storage:/usr/src/app/storage
 
     api:
         image: learninglocker-app:${DOCKER_TAG}
@@ -36,11 +65,13 @@ services:
             - SMTP_PASS
         command: "node api/dist/server"
         restart: unless-stopped
+        ports:
+            - "8080:8080"
         depends_on:
             - mongo
             - redis
         volumes:
-            - "${DATA_LOCATION}/app-storage:/opt/learninglocker/storage"
+            - app-storage:/opt/learninglocker/storage
 
     ui:
         image: learninglocker-app:${DOCKER_TAG}
@@ -58,9 +89,11 @@ services:
             - mongo
             - redis
             - api
+        ports:
+            - "3000:3000"
         volumes:
-            - "${DATA_LOCATION}/app-storage:/opt/learninglocker/storage"
-            - "${DATA_LOCATION}/ui-logs:/opt/learninglocker/logs"
+            - app-storage:/opt/learninglocker/storage
+            - ui-logs:/opt/learninglocker/logs
 
     worker:
         image: learninglocker-app:${DOCKER_TAG}
@@ -78,16 +111,5 @@ services:
             - mongo
             - redis
         volumes:
-            - "${DATA_LOCATION}/app-storage:/opt/learninglocker/storage"
+            - app-storage:/opt/learninglocker/storage
 
-    nginx:
-        image: learninglocker-nginx:${DOCKER_TAG}
-        environment:
-            - DOMAIN_NAME
-        restart: unless-stopped
-        depends_on:
-            - ui
-            - xapi
-        ports:
-            - "443:443"
-            - "8080:80"
